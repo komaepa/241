@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스트리밍 뷰어샵 실시간 비교 분석</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* ==================================== */
+        /* 1. 기본/공통 스타일 */
+        /* ==================================== */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 0; 
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* 다크 모드 스타일 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        body.dark-mode header,
+        body.dark-mode .platform-box,
+        body.dark-mode #channel-list li,
+        body.dark-mode .streamer-history {
+            background-color: #1f1f1f;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+        body.dark-mode .platform-box h2,
+        body.dark-mode .channel-list-container h2,
+        body.dark-mode .streamer-history h3 {
+            color: #f0f0f0;
+        }
+        body.dark-mode .sub-info, body.dark-mode .update-time, body.dark-mode .detail,
+        body.dark-mode .streamer-history p {
+            color: #a0a0a0;
+        }
+        body.dark-mode .search-box input {
+            background-color: #2c2c2c;
+            color: #e0e0e0;
+            border: 1px solid #444;
+        }
+        body.dark-mode .search-box button {
+            background-color: #0099ff;
+        }
+        body.dark-mode .viewer-count {
+            color: #e0e0e0;
+        }
+
+        /* ==================================== */
+        /* 2. 레이아웃 및 컴포넌트 스타일 */
+        /* ==================================== */
+        header {
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 15px 40px;
+            margin-bottom: 20px;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header h1 { font-size: 1.2em; font-weight: 600; color: #555; margin: 0; }
+        .search-box { display: flex; border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
+        .search-box input { padding: 8px 15px; border: none; outline: none; width: 250px; }
+        .search-box button { background-color: #007bff; color: white; border: none; padding: 8px 12px; cursor: pointer; font-size: 1em; }
+        
+        .dashboard-container { display: flex; gap: 20px; padding: 0 40px; max-width: 1200px; margin: 0 auto 20px; }
+        .platform-box {
+            flex: 1;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+
+        .platform-box h2 { font-size: 1.2em; font-weight: 500; margin-top: 0; display: flex; align-items: center; gap: 5px; }
+        .soop h2 span.platform-name { color: #51a029; font-weight: 700; }
+        .chzzk h2 span.platform-name { color: #06e149; font-weight: 700; }
+        .current-viewers { font-size: 3.8em; font-weight: 800; margin: 5px 0 0; line-height: 1.1; }
+        .sub-info { font-size: 0.9em; color: #666; margin-bottom: 20px; }
+        .viewer-trend-chart { height: 120px; width: 100%; }
+        .update-time { font-size: 0.8em; color: #999; margin-top: 15px; }
+
+        /* 채널 목록 스타일 */
+        .channel-list-container { display: flex; flex-direction: column; padding: 30px 40px; max-width: 1200px; margin: 0 auto; }
+        .content-wrapper { display: flex; width: 100%; margin-bottom: 20px; }
+        .main-list-area { flex-grow: 1; }
+        #channel-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+        #channel-list li {
+            display: flex; justify-content: space-between; align-items: center; background: white;
+            padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+        .rank { font-weight: bold; width: 30px; text-align: center; }
+        .channel-info { flex-grow: 1; font-weight: 500; }
+        .detail { color: #888; font-size: 0.9em; margin-left: 5px; }
+        .list-extra { display: flex; flex-direction: column; justify-content: flex-start; gap: 10px; width: 150px; margin-left: 20px; }
+        .list-extra div { font-size: 0.9em; text-align: right; font-weight: 500; padding: 15px 0; }
+        .list-extra .soop { color: #51a029; }
+        .list-extra .chzzk { color: #06e149; }
+
+        /* 스트리머별 기록 박스 스타일 */
+        .streamer-history {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+            margin-top: 20px;
+        }
+        .streamer-history h3 {
+            font-size: 1.2em;
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .streamer-history p {
+            margin: 5px 0;
+            font-size: 0.95em;
+        }
+
+
+        /* ==================================== */
+        /* 3. 토글 및 알림 스타일 */
+        /* ==================================== */
+        .mode-toggle {
+            padding: 5px 10px;
+            background: #ccc;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 15px;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        body.dark-mode .mode-toggle {
+            background: #444;
+            color: white;
+        }
+
+        /* 뷰봇 감지 알림창 스타일 */
+        #alertOverlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .alert-box {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(255, 0, 0, 0.8);
+            max-width: 450px;
+            animation: shake 0.8s;
+            border: 3px solid #e74c3c;
+        }
+        body.dark-mode .alert-box {
+            background: #2c2c2c;
+            color: white;
+        }
+        .alert-box h3 {
+            color: #e74c3c;
+            margin-top: 0;
+            font-size: 2em;
+            font-weight: 700;
+        }
+        .alert-box p {
+            font-size: 1.1em;
+            line-height: 1.5;
+            margin-bottom: 30px;
+        }
+        .alert-box button {
+            background-color: #e74c3c;
+            color: white;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+    </style>
+    </head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>스트리밍 뷰어샵 실시간 비교 분석</h1>
+            <div style="display: flex; align-items: center;">
+                <div class="search-box">
+                    <input id="searchInput" type="text" placeholder="키워드를 검색해 보세요">
+                    <button id="searchButton" type="button">🔍</button>
+                </div>
+                <button id="modeToggle" class="mode-toggle">다크 모드 🌙</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-container">
+        <section id="soop-box" class="platform-box soop"></section>
+        <section id="chzzk-box" class="platform-box chzzk"></section>
+    </main>
+
+    <section class="channel-list-container">
+        </section>
+
+    <div id="alertOverlay">
+        <div class="alert-box">
+            <h3>🔴 긴급 경고: 시스템 이상 감지</h3>
+            <p>
+                **치지직(CHZZK) 플랫폼**에서 비정상적인 동시 시청자 수 급증이 감지되었습니다.<br><br>
+                **단 1회**의 경고가 누적되었습니다.
+            </p>
+            <p style="color: red; font-weight: bold; font-size: 1.2em;">
+                경고 메시지에 대한 조치가 이루어지지 않을 경우, <br>
+                **네이버 본사 압수수색**이 이루어질 예정입니다.
+            </p>
+            <button onclick="hideAlert()">위험 감수 및 닫기</button>
+        </div>
+    </div>
+
+    <script>
+        // 1. 초기 데이터 정의
+        let soopData = {
+            platformName: "SOOP (숲)",
+            shortName: "SOOP",
+            viewers: 172025,
+            viewerChange: 0, 
+            trend: [170, 168, 172, 175, 172, 169, 174, 171, 173, 172], // 천 명 단위
+            trendColor: '#51a029',
+            updateTime: ''
+        };
+
+        let chzzkData = {
+            platformName: "치지직 (CHZZK)",
+            shortName: "CHZZK",
+            viewers: 53414, // 초기값은 10만 미만으로 설정
+            viewerChange: 0,
+            trend: [50, 55, 52, 53, 58, 56, 54, 57, 53, 55], // 천 명 단위
+            trendColor: '#06e149',
+            updateTime: ''
+        };
+
+        const mockChannels = [
+            { name: "이세계아이돌", detail: "프로필 스트리머 H (이세계)", platform: "SOOP", viewers: 20000, keywords: ["이세계아이돌", "버츄얼"] },
+            { name: "스트리머 B", detail: "대형 종합게임 (침펄맨)", platform: "CHZZK", viewers: 20438, keywords: ["종합게임", "침펄"] },
+            { name: "스트리머 C", detail: "프로필 스트리머 C (비전)", platform: "SOOP", viewers: 24514, keywords: ["노래", "Just Chatting"] },
+            { name: "스트리머 E", detail: "프로필 스트리머 E (롤)", platform: "SOOP", viewers: 25438, keywords: ["게임", "롤"] },
+            { name: "스트리머 G", detail: "프로필 스트리머 G (아이돌)", platform: "CHZZK", viewers: 16512, keywords: ["버츄얼", "노래"] },
+            { name: "스트리머 D", detail: "주식/경제 전문가", platform: "CHZZK", viewers: 14000, keywords: ["주식", "경제"] },
+            { name: "스트리머 F", detail: "먹방/소통 대가", platform: "SOOP", viewers: 18000, keywords: ["먹방", "소통"] },
+            { name: "스트리머 I", detail: "프로필 스트리머 I (고세구)", platform: "SOOP", viewers: 15000, keywords: ["이세계아이돌", "버츄얼"] },
+            { name: "스트리머 J", detail: "프로필 스트리머 J (우왁굳)", platform: "SOOP", viewers: 13000, keywords: ["우왁굳", "종합게임"] },
+            { name: "스트리머 K", detail: "프로필 스트리머 K (풍월량)", platform: "CHZZK", viewers: 12000, keywords: ["풍월량", "게임"] },
+        ];
+        
+        // 2. 스트리머 시청자 기록 데이터 (현재 시청자수만 사용)
+        let streamerHistoryData = mockChannels.map(c => ({
+            name: c.name,
+            viewers: [c.viewers],
+            maxViewer: c.viewers,
+            minViewer: c.viewers
+        }));
+        
+
+        // 3. 헬퍼 함수: 난수 생성 (min과 max 사이의 정수)
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // 4. 데이터 업데이트 및 재렌더링 메인 함수
+        function updateDataAndRender() {
+            // A. 플랫폼 시청자수 및 추이 업데이트
+            const newSoopViewers = soopData.viewers + getRandomInt(-10000, 10000); // 1~20만 사이 랜덤 변동
+            const newChzzkViewers = chzzkData.viewers + getRandomInt(-5000, 5000);  // 3~8만 사이 랜덤 변동
+            
+            // 시청자 수 범위 제한
+            soopData.viewers = Math.max(100000, newSoopViewers); 
+            chzzkData.viewers = Math.max(30000, newChzzkViewers);
+            
+            // 추이 데이터 업데이트
+            soopData.trend.shift();
+            soopData.trend.push(Math.round(soopData.viewers / 1000)); // 천 명 단위로 저장
+            
+            chzzkData.trend.shift();
+            chzzkData.trend.push(Math.round(chzzkData.viewers / 1000));
+            
+            // 시청자 변동 값 업데이트 (단순 현재-이전 데이터로 계산)
+            soopData.viewerChange = soopData.viewers - soopData.trend[soopData.trend.length - 2] * 1000;
+            chzzkData.viewerChange = chzzkData.viewers - chzzkData.trend[chzzkData.trend.length - 2] * 1000;
+
+            // 시간 업데이트
+            soopData.updateTime = chzzkData.updateTime = new Date().toLocaleTimeString('ko-KR');
+
+            // B. 스트리머 시청자 수 업데이트 (최대 10명만)
+            let updatedChannels = [];
+            
+            // 무작위로 상위 10개 채널의 시청자 수 변동
+            mockChannels.forEach((channel, index) => {
+                const viewerChange = getRandomInt(-2000, 2000);
+                const newViewers = Math.max(10000, channel.viewers + viewerChange); // 최소 1만명 보장
+                
+                channel.viewers = newViewers;
+                updatedChannels.push(channel);
+                
+                // 시청자 기록 업데이트
+                const historyItem = streamerHistoryData.find(item => item.name === channel.name);
+                if (historyItem) {
+                    historyItem.viewers.push(newViewers);
+                    historyItem.maxViewer = Math.max(historyItem.maxViewer, newViewers);
+                    historyItem.minViewer = Math.min(historyItem.minViewer, newViewers);
+                }
+            });
+
+            // 시청자 순으로 다시 정렬하여 목록에 표시
+            const sortedChannels = updatedChannels.sort((a, b) => b.viewers - a.viewers).slice(0, 10);
+            
+            // C. 렌더링
+            drawPlatformBox(soopData, 'soop-box');
+            drawPlatformBox(chzzkData, 'chzzk-box');
+            renderChannelList(sortedChannels);
+            
+            // D. 뷰봇 감지 확인
+            checkBotDetection();
+        }
+
+
+        // 5. Chart.js를 사용한 막대 그래프 그리기 및 박스 내용 채우기 함수
+        let soopChart, chzzkChart; // 차트 인스턴스를 저장할 변수
+
+        function drawPlatformBox(data, elementId) {
+            const box = document.getElementById(elementId);
+            const platform = data.shortName;
+            const platformClass = platform.toLowerCase();
+            const canvasId = `${platformClass}-chart`;
+            
+            // 캔버스가 이미 존재하면 업데이트만 하고, 없으면 새로 생성
+            if (box.children.length === 0 || !document.getElementById(canvasId)) {
+                 box.innerHTML = `
+                    <h2>
+                        <span class="viewer-change" style="color: ${data.trendColor};">▲ ${data.viewerChange.toLocaleString()}명</span>
+                        <span class="platform-name">${platform}</span> (${data.platformName.includes('숲') ? '숲' : 'CHZZK'})
+                    </h2>
+                    <div class="current-viewers">${data.viewers.toLocaleString()}</div>
+                    <div class="sub-info">명 (현재 동시 시청자 수)</div>
+                    
+                    <h3>최근 10분 시청자 추이</h3>
+                    <div class="viewer-trend-chart">
+                        <canvas id="${canvasId}"></canvas>
+                    </div>
+                    <div class="update-time">최신 업데이트: ${data.updateTime}</div>
+                `;
+
+                const ctx = document.getElementById(canvasId).getContext('2d');
+                const newChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Array(10).fill(''), 
+                        datasets: [{
+                            data: data.trend,
+                            backgroundColor: data.trendColor,
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }, 
+                        scales: {
+                            x: { display: false, grid: { display: false } }, 
+                            y: { display: false, beginAtZero: false, grid: { display: false } }  
+                        }
+                    }
+                });
+                
+                // 차트 인스턴스 저장
+                if (platformClass === 'soop') soopChart = newChart;
+                if (platformClass === 'chzzk') chzzkChart = newChart;
+
+            } else {
+                // DOM 요소 업데이트
+                box.querySelector('.viewer-change').textContent = (data.viewerChange >= 0 ? '▲ ' : '▼ ') + Math.abs(data.viewerChange).toLocaleString() + '명';
+                box.querySelector('.current-viewers').textContent = data.viewers.toLocaleString();
+                box.querySelector('.update-time').textContent = '최신 업데이트: ' + data.updateTime;
+                
+                // Chart.js 데이터 업데이트
+                const chartInstance = platformClass === 'soop' ? soopChart : chzzkChart;
+                if (chartInstance) {
+                    chartInstance.data.datasets[0].data = data.trend;
+                    chartInstance.update();
+                }
+            }
+        }
+
+        // 6. 스트리머별 시청자 기록 박스 그리기 (업데이트)
+        function renderStreamerHistory() {
+            const container = document.querySelector('.channel-list-container');
+            let historyBox = container.querySelector('.streamer-history');
+
+            if (!historyBox) {
+                historyBox = document.createElement('div');
+                historyBox.classList.add('streamer-history');
+                container.appendChild(historyBox);
+            }
+
+            let historyHtml = '<h3>스트리머별 시청자 기록 (가상 데이터)</h3>';
+            
+            // 현재 목록에 있는 상위 10명만 기록에서 찾아서 보여줍니다.
+            const top10Names = mockChannels.sort((a, b) => b.viewers - a.viewers).slice(0, 10).map(c => c.name);
+
+            streamerHistoryData.filter(item => top10Names.includes(item.name)).forEach(item => {
+                const current = item.viewers[item.viewers.length - 1];
+                const max = item.maxViewer;
+                const min = item.minViewer;
+                
+                historyHtml += `
+                    <p>
+                        <strong>${item.name}:</strong> 
+                        현재 ${current.toLocaleString()}명 / 
+                        최고 ${max.toLocaleString()}명 / 
+                        최저 ${min.toLocaleString()}명
+                    </p>
+                `;
+            });
+            
+            historyBox.innerHTML = historyHtml;
+        }
+
+
+        // 7. 채널 목록 출력 (상위 10명만 처리)
+        function renderChannelList(channelsToShow = mockChannels.slice(0, 10)) {
+            const container = document.querySelector('.channel-list-container');
+            let listContainer = container.querySelector('.list-content-wrapper');
+            
+            if (!listContainer) {
+                // 초기 생성 로직 (이전과 동일)
+                container.innerHTML = '<h2>현재 방송 중인 주요 채널 (상위 10명, 가상 데이터)</h2>';
+                
+                listContainer = document.createElement('div');
+                listContainer.classList.add('content-wrapper', 'list-content-wrapper');
+                
+                let mainListArea = document.createElement('div');
+                mainListArea.classList.add('main-list-area');
+                
+                let listElement = document.createElement('ul');
+                listElement.id = 'channel-list';
+                mainListArea.appendChild(listElement);
+
+                let extraListArea = document.createElement('div');
+                extraListArea.classList.add('list-extra');
+                
+                listContainer.appendChild(mainListArea);
+                listContainer.appendChild(extraListArea);
+                container.appendChild(listContainer);
+            }
+            
+            const listElement = listContainer.querySelector('#channel-list');
+            const extraListArea = listContainer.querySelector('.list-extra');
+
+            let listHtml = '';
+            extraListArea.innerHTML = '';
+            
+            const sortedChannels = channelsToShow.sort((a, b) => b.viewers - a.viewers).slice(0, 10); // 최종적으로 10명만 사용
+
+            if (sortedChannels.length === 0) {
+                listElement.innerHTML = `<li style="justify-content: center; color: #888;">검색 결과가 없습니다.</li>`;
+                return; 
+            }
+
+            sortedChannels.forEach((channel, index) => {
+                listHtml += `
+                    <li>
+                        <div class="rank">${index + 1}.</div>
+                        <div class="channel-info">
+                            <span class="channel-name">${channel.name}</span>
+                            <span class="detail">(${channel.detail})</span>
+                        </div>
+                    </li>
+                `;
+                extraListArea.innerHTML += `
+                    <div class="${channel.platform.toLowerCase()}">${channel.platform} ${channel.viewers.toLocaleString()}명</div>
+                `;
+            });
+            
+            listElement.innerHTML = listHtml;
+            
+            // 기록 박스 업데이트
+            renderStreamerHistory();
+        }
+
+        // 8. 검색 기능 구현 (이전과 동일)
+        function handleSearch(event) {
+            // ... (검색 로직은 그대로 유지)
+            if (event.type === 'keydown' && event.keyCode !== 13 && event.key !== 'Enter') {
+                return;
+            }
+            
+            if (event.type === 'click' || event.keyCode === 13 || event.key === 'Enter') {
+                 event.preventDefault(); 
+            }
+            
+            const searchInput = document.getElementById('searchInput');
+            const keyword = searchInput.value.toLowerCase().trim();
+
+            if (!keyword) {
+                renderChannelList(mockChannels);
+                return;
+            }
+
+            const filteredChannels = mockChannels.filter(channel => {
+                const nameMatch = channel.name.toLowerCase().includes(keyword);
+                const detailMatch = channel.detail.toLowerCase().includes(keyword);
+                const keywordMatch = channel.keywords && channel.keywords.some(k => k.toLowerCase().includes(keyword));
+                
+                return nameMatch || detailMatch || keywordMatch;
+            });
+
+            renderChannelList(filteredChannels);
+        }
+
+        // 9. 다크 모드 토글 기능 (이전과 동일)
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const toggleButton = document.getElementById('modeToggle');
+            if (document.body.classList.contains('dark-mode')) {
+                toggleButton.textContent = '라이트 모드 ☀️';
+            } else {
+                toggleButton.textContent = '다크 모드 🌙';
+            }
+        }
+        
+        // 10. 뷰봇 감지 알림 기능 (1회 경고 즉시 압수수색 메시지)
+        function checkBotDetection() {
+            // 치지직 시청자가 100,000명을 초과하는지 확인
+            if (chzzkData.viewers >= 100000) {
+                document.getElementById('alertOverlay').style.display = 'flex';
+            }
+        }
+
+        // 11. 알림창 숨기기 함수
+        function hideAlert() {
+            document.getElementById('alertOverlay').style.display='none';
+        }
+        
+        let botDetectionInterval; // 뷰봇 경고 주기 변수
+        let dataUpdateInterval; // 실시간 데이터 업데이트 주기 변수
+
+
+        // 12. 스크립트 실행 및 이벤트 리스너 부착
+        document.addEventListener('DOMContentLoaded', () => {
+            // 초기 데이터 로드 및 그래프 그리기
+            updateDataAndRender(); // 초기 렌더링
+
+            // 실시간 데이터 업데이트 시작 (10초마다 = 10000ms)
+            dataUpdateInterval = setInterval(updateDataAndRender, 10000);
+
+            // 뷰봇 감지 알림 시작 (1분마다 반복 = 60000ms)
+            botDetectionInterval = setInterval(checkBotDetection, 60000);
+
+            // 이벤트 리스너 부착
+            const searchInput = document.getElementById('searchInput');
+            const searchButton = document.getElementById('searchButton');
+            const modeToggle = document.getElementById('modeToggle');
+
+            searchButton.addEventListener('click', handleSearch);
+            searchInput.addEventListener('keydown', handleSearch);
+            searchInput.addEventListener('input', handleSearch); 
+            modeToggle.addEventListener('click', toggleDarkMode);
+        });
+    </script>
+    </body>
+</html>
